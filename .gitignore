@@ -3,3 +3,7 @@
 /all_data.csv
 /dict.txt
 /file_map.tsv
+/eval_set.csv
+/train_set.csv
+*.jpg
+*.json
