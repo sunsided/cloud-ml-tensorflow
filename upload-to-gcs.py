@@ -5,6 +5,7 @@ from typing import Dict, Optional
 
 import csv
 from hashlib import sha256
+from random import random
 
 from google.cloud import storage
 from oauth2client.client import GoogleCredentials
@@ -14,19 +15,29 @@ def main():
     bucket_name = 'research-and-development'
     bucket = _get_bucket(bucket_name)
 
+    dict_filename = 'dict.txt'
+    all_filename = 'all_data.csv'
+    train_filename = 'train_set.csv'
+    eval_filename = 'eval_set.csv'
+
     object_dir = 'cloud-ml/mmayer/kotaru'  # Koffer, Tasche, Rucksack
 
     source_dir = 'augmented'
     classes_map = _get_classes_from_dir(source_dir)
 
     # write the class dictionary
-    with open('dict.txt', 'w') as f:
+    with open(dict_filename, 'w') as f:
         for class_name in classes_map.keys():
             f.write(class_name + '\n')
 
     # upload the files and register the class labels
-    with open('all_data.csv', 'w') as fc, open('file_map.tsv', 'w') as fm:
-        class_writer = csv.writer(fc, delimiter=',')
+    with open(all_filename, 'w', newline="\n", encoding="utf-8") as fc, \
+            open(train_filename, 'w', newline='\n', encoding='utf-8') as ft, \
+            open(eval_filename, 'w', newline='\n', encoding='utf-8') as fe, \
+            open('file_map.tsv', 'w', newline='\n', encoding='utf-8') as fm:
+        all_writer = csv.writer(fc, delimiter=',')
+        train_writer = csv.writer(ft, delimiter=',')
+        eval_writer = csv.writer(fe, delimiter=',')
         map_writer = csv.writer(fm, delimiter='\t')
 
         for (class_name, dir) in tqdm(classes_map.items(), desc='Total progress'):
@@ -36,14 +47,24 @@ def main():
                 target_filename = sha256(path.basename(file).encode('utf-8')).hexdigest()
 
                 blob_name = '%s/%s/%s.jpg' % (object_dir, class_name, target_filename)
+                blob_url = 'gs://%s/%s' % (bucket_name, blob_name)
+
                 _upload_to_gs(file, blob_name, bucket)
 
-                blob_url = 'gs://%s/%s' % (bucket_name, blob_name)
-                class_writer.writerow([blob_url, class_name])
+                all_writer.writerow([blob_url, class_name])
+                if random() >= 0.3:
+                    train_writer.writerow([blob_url, class_name])
+                else:
+                    eval_writer.writerow([blob_url, class_name])
+
                 map_writer.writerow([blob_url, file])
 
             fc.flush()
             fm.flush()
+
+        # upload all the things!
+        for file_name in [dict_filename, all_filename, train_filename, eval_filename]:
+            _upload_to_gs(file_name, '%s/%s' % (object_dir, file_name), bucket)
 
 
 def _get_classes_from_dir(source_dir: str) -> Dict[str, str]:
